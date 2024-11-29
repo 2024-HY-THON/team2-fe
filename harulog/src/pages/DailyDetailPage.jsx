@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { useNavigate, useParams } from "react-router-dom";
-import mockData from "../mocks/mockData.json";
 import UpButton from "../components/UpButton";
 //import assets
 import Drawing from "../assets/icon_drawing.svg";
@@ -18,6 +17,7 @@ import Food from "../assets/icon_food.svg";
 import Video from "../assets/icon_video.svg";
 import { BASE_URL } from "../components/BASE_URL";
 import axios from "axios";
+import ScrollToTop from "../components/ScrollToTop";
 
 const activityImages = [Beverage, Music, Food, Video];
 const messages = [
@@ -49,6 +49,11 @@ const DailyDetailPage = () => {
     const [drawingApiText, setDrawingApiText] = useState('');
     const [diaryData, setDiaryData] = useState([]);
     const [date, setDate] = useState("");
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [author, setAuthor] = useState('');
+    const [password, setPassword] = useState('');
+    const [modalType, setModalType] = useState('');
+    const [showPasswordError, setShowPasswordError] = useState(false);
 
     useEffect(() => {
         const fetchDiary = async () => {
@@ -70,8 +75,18 @@ const DailyDetailPage = () => {
         }
     }, [apiText]);
 
+    const validatePassword = (inputPassword) => {
+        return inputPassword === "1234";
+    };
+    
     const handleLike = () => {
         setLike((prev) => !prev);
+    };
+
+    const handleEditClick = (type) => {
+        setModalType(type);
+        setShowAuthModal(true);
+        setShowPasswordError(false);
     };
 
     const handleWriteAPI = () => {
@@ -90,8 +105,51 @@ const DailyDetailPage = () => {
         fetchWriteAPI();
     }
 
+    const validateAuth = (inputAuthor, inputPassword) => {
+        return inputAuthor === "하루" && inputPassword === "1234";
+    };
+
+    const handleAuthSubmit = async () => {
+        if (!validateAuth(author, password)) {  // validatePassword 대신 validateAuth 사용
+            setShowPasswordError(true);
+            return;
+        }
+    
+        try {
+            if (modalType === 'text') {
+                const response = await axios.post(`${BASE_URL}/diaries/adaptation`, {
+                    id: id,
+                    password: password,
+                });
+                setApiText(response.data.adapted_content);
+                setShowAuthModal(false);
+                setTimeout(() => {
+                    setShowTextModal(true);
+                }, 100);
+            } else if (modalType === 'drawing') {
+                const response = await axios.post(`${BASE_URL}/diaries/drawing-adaptation`, {
+                    id: id,
+                    password: password,
+                });
+                setDrawingApiText(response.data.adapted_drawing);
+                setShowAuthModal(false);
+                setTimeout(() => {
+                    setShowDrawingModal(true);
+                }, 100);
+            }
+        
+            setAuthor('');
+            setPassword('');
+            setShowPasswordError(false);
+        } catch (error) {
+            console.error("Error:", error);
+            setShowPasswordError(true);
+        }
+    };
+
     return (
         <Container>
+            <ScrollToTop />
             <Content>
                 <Header>
                     <CategoryAndDate>
@@ -115,7 +173,7 @@ const DailyDetailPage = () => {
                     {diaryData.image_data && (
                         <DrawingImage src={diaryData.image_data} alt="diary drawing" />
                     )}
-                    <EditButton onClick={() => setShowDrawingModal(true)}>
+                    <EditButton onClick={() => handleEditClick('drawing')}>
                         <img src={Pencil} alt="edit" width="32" height="32" />
                     </EditButton>
                 </DrawingBox>
@@ -124,7 +182,7 @@ const DailyDetailPage = () => {
                     <TextContent>
                         {diaryData.content}
                     </TextContent>
-                    <EditButton onClick={() => handleWriteAPI()}>
+                    <EditButton onClick={() => handleEditClick('text')}>
                         <img src={Pencil} alt="edit" width="32" height="32" />
                     </EditButton>
                 </TextBox>
@@ -181,6 +239,54 @@ const DailyDetailPage = () => {
                             {apiText}
                         </ModalTextBox>
                         <ModalText>AI가 재해석한 하루님의 하루 어떠신가요?</ModalText>
+                    </Modal>
+                </ModalOverlay>
+            )}
+
+            {showAuthModal && (
+                <ModalOverlay>
+                    <Modal>
+                        <CloseButton onClick={() => {
+                            setShowAuthModal(false);
+                            setShowPasswordError(false);
+                        }}>×</CloseButton>
+                        <ModalTitle>AI와 함께하는 로그는 작성자만 볼 수 있어요</ModalTitle>
+                        <ModalDescription>
+                            하루로그는 일상의 평범함을 더욱 즐겁게 만들기 위해 여러분과 함께합니다
+                        </ModalDescription>
+                        <AuthInputGroup>
+                            <AuthInputLabel>작성자</AuthInputLabel>
+                            <AuthInput 
+                                value={author}
+                                onChange={(e) => setAuthor(e.target.value)}
+                                placeholder="작성자가 아니에요"
+                                isError={showPasswordError}
+                            />
+                        </AuthInputGroup>
+                        <AuthInputGroup>
+                            <AuthInputLabel>비밀번호</AuthInputLabel>
+                            <AuthInput 
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="11112222"
+                                isError={showPasswordError}
+                            />
+                            {showPasswordError && (
+                                <ErrorMessage>작성자 또는 비밀번호가 일치하지 않습니다.</ErrorMessage>
+                            )}
+                        </AuthInputGroup>
+                        <ButtonGroup>
+                            <CancelButton onClick={() => {
+                                setShowAuthModal(false);
+                                setShowPasswordError(false);
+                            }}>
+                                작성자가 아니에요
+                            </CancelButton>
+                            <SubmitButton onClick={handleAuthSubmit}>
+                                AI와 함께한 로그 확인하기
+                            </SubmitButton>
+                        </ButtonGroup>
                     </Modal>
                 </ModalOverlay>
             )}
@@ -438,6 +544,85 @@ const ModalTextBox = styled.div`
     color: #333;
     white-space: pre-wrap;
     overflow-y: auto;
+`;
+
+const ModalDescription = styled.p`
+    font-size: 16px;
+    color: #666;
+    margin: 0;
+    text-align: center;
+`;
+
+const AuthInputGroup = styled.div`
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+`;
+
+const AuthInputLabel = styled.label`
+    font-size: 14px;
+    color: #333;
+`;
+
+const ErrorMessage = styled.p`
+    color: #FF4B4B;
+    font-size: 12px;
+    margin: 4px 0 0 0;
+`;
+
+const AuthInput = styled.input`
+    width: 100%;
+    height: 40px;
+    padding: 8px 12px;
+    border: 1px solid ${props => props.isError ? '#FF4B4B' : '#DDD'};
+    border-radius: 4px;
+    font-size: 14px;
+    
+    &::placeholder {
+        color: #999;
+    }
+    
+    &:focus {
+        outline: none;
+        border-color: ${props => props.isError ? '#FF4B4B' : '#7B7EF6'};
+    }
+`;
+
+const ButtonGroup = styled.div`
+    width: 100%;
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+`;
+
+const CancelButton = styled.button`
+    flex: 1;
+    height: 40px;
+    border: 1px solid #DDD;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    
+    &:hover {
+        background: #f5f5f5;
+    }
+`;
+
+const SubmitButton = styled.button`
+    flex: 1;
+    height: 40px;
+    border: none;
+    border-radius: 4px;
+    background: #7B7EF6;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    
+    &:hover {
+        background: #6366F1;
+    }
 `;
 
 export default DailyDetailPage;
