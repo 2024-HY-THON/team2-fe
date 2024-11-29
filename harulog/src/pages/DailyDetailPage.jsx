@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
-import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios"
+import { useParams } from "react-router-dom";
 import UpButton from "../components/UpButton";
+import { BASE_URL } from "../components/BASE_URL";
+import ScrollToTop from "../components/ScrollToTop";
 //import assets
-import Drawing from "../assets/icon_drawing.svg";
 import Communication from "../assets/icon_communication.svg";
 import Thanks from "../assets/icon_thanks.svg";
 import Relax from "../assets/icon_relax.svg";
@@ -15,9 +17,8 @@ import Beverage from "../assets/icon_beverage.svg";
 import Music from "../assets/icon_music.svg";
 import Food from "../assets/icon_food.svg";
 import Video from "../assets/icon_video.svg";
-import { BASE_URL } from "../components/BASE_URL";
-import axios from "axios";
-import ScrollToTop from "../components/ScrollToTop";
+import ShowEye from "../assets/icon_showPW.svg";
+import hideEye from "../assets/icon_hidePW.svg";
 
 const activityImages = [Beverage, Music, Food, Video];
 const messages = [
@@ -38,7 +39,6 @@ const categoryImages = {
 
 const DailyDetailPage = () => {
 
-    const navigate = useNavigate();
     const { id } = useParams();
     const [like, setLike] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -54,6 +54,8 @@ const DailyDetailPage = () => {
     const [password, setPassword] = useState('');
     const [modalType, setModalType] = useState('');
     const [showPasswordError, setShowPasswordError] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [isPasswordValid, setIsPasswordValid] = useState(true);
 
     useEffect(() => {
         const fetchDiary = async () => {
@@ -89,6 +91,16 @@ const DailyDetailPage = () => {
         setShowPasswordError(false);
     };
 
+    const handleShowPassword = () => {
+        setShowPassword(!showPassword);
+    };
+
+    const handlePasswordChange = (e) => {
+        const newPassword = e.target.value;
+        setPassword(newPassword);
+        setIsPasswordValid(newPassword.length >= 4);
+    };
+
     const handleWriteAPI = () => {
         setShowTextModal(true);
         const fetchWriteAPI = async () => {
@@ -110,37 +122,37 @@ const DailyDetailPage = () => {
     };
 
     const handleAuthSubmit = async () => {
-        if (!validateAuth(author, password)) {  // validatePassword 대신 validateAuth 사용
-            setShowPasswordError(true);
-            return;
-        }
-    
         try {
-            if (modalType === 'text') {
-                const response = await axios.post(`${BASE_URL}/diaries/adaptation`, {
-                    id: id,
-                    password: password,
-                });
-                setApiText(response.data.adapted_content);
-                setShowAuthModal(false);
-                setTimeout(() => {
-                    setShowTextModal(true);
-                }, 100);
-            } else if (modalType === 'drawing') {
-                const response = await axios.post(`${BASE_URL}/diaries/drawing-adaptation`, {
-                    id: id,
-                    password: password,
-                });
-                setDrawingApiText(response.data.adapted_drawing);
-                setShowAuthModal(false);
-                setTimeout(() => {
-                    setShowDrawingModal(true);
-                }, 100);
+            const validationResponse = await axios.post(`${BASE_URL}/diaries/adaptation`, {
+                id: id,
+                password: password,
+            });
+    
+            if (validationResponse.data.adapted_content !== null) {
+                if (modalType === 'text') {
+                    setApiText(validationResponse.data.adapted_content);
+                    setShowAuthModal(false);
+                    setTimeout(() => {
+                        setShowTextModal(true);
+                    }, 100);
+                } else if (modalType === 'drawing') {
+                    const drawingResponse = await axios.post(`${BASE_URL}/diaries/drawing-adaptation`, {
+                        id: id,
+                        password: password,
+                    });
+                    setDrawingApiText(drawingResponse.data.adapted_drawing);
+                    setShowAuthModal(false);
+                    setTimeout(() => {
+                        setShowDrawingModal(true);
+                    }, 100);
+                }
+                
+                setAuthor('');
+                setPassword('');
+                setShowPasswordError(false);
+            } else {
+                setShowPasswordError(true);
             }
-        
-            setAuthor('');
-            setPassword('');
-            setShowPasswordError(false);
         } catch (error) {
             console.error("Error:", error);
             setShowPasswordError(true);
@@ -259,19 +271,29 @@ const DailyDetailPage = () => {
                             <AuthInput 
                                 value={author}
                                 onChange={(e) => setAuthor(e.target.value)}
-                                placeholder="작성자가 아니에요"
+                                placeholder="작성자를 작성해주세요"
                                 isError={showPasswordError}
                             />
                         </AuthInputGroup>
                         <AuthInputGroup>
                             <AuthInputLabel>비밀번호</AuthInputLabel>
-                            <AuthInput 
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="11112222"
-                                isError={showPasswordError}
-                            />
+                            <div style={{ position: 'relative' }}>
+                                <AuthInput 
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={handlePasswordChange}
+                                    placeholder="로그의 비밀번호를 설정해주세요 (영문, 숫자 무관 4자리 이상)"
+                                    minLength={4}
+                                    maxLength={20}
+                                    isError={!isPasswordValid || showPasswordError}
+                                />
+                                <EyeIcon onClick={handleShowPassword}>
+                                    {showPassword ? <img src={ShowEye} alt="비밀번호 숨기기" /> : <img src={hideEye} alt="비밀번호 보기" />}
+                                </EyeIcon>
+                            </div>
+                            {!isPasswordValid && (
+                                <ErrorMessage>비밀번호는 4자리 이상이어야 합니다.</ErrorMessage>
+                            )}
                             {showPasswordError && (
                                 <ErrorMessage>작성자 또는 비밀번호가 일치하지 않습니다.</ErrorMessage>
                             )}
@@ -558,6 +580,8 @@ const AuthInputGroup = styled.div`
     display: flex;
     flex-direction: column;
     gap: 8px;
+    height: 76px;
+    position: relative;
 `;
 
 const AuthInputLabel = styled.label`
@@ -568,7 +592,10 @@ const AuthInputLabel = styled.label`
 const ErrorMessage = styled.p`
     color: #FF4B4B;
     font-size: 12px;
-    margin: 4px 0 0 0;
+    margin: 0;
+    position: absolute;
+    bottom: -32px;
+    left: 0;
 `;
 
 const AuthInput = styled.input`
@@ -622,6 +649,19 @@ const SubmitButton = styled.button`
     
     &:hover {
         background: #6366F1;
+    }
+`;
+
+const EyeIcon = styled.div`
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    
+    img {
+        width: 20px;
+        height: 20px;
     }
 `;
 
